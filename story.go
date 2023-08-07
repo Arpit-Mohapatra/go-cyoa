@@ -2,7 +2,6 @@ package cyoa
 
 import (
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -79,8 +78,20 @@ var defaultHandlerTmpl = `<!DOCTYPE html>
 </body>
 </html>`
 
-func NewHandler(s Story) http.Handler {
-	return handler{s}
+type HandlerOpt func(h *handler)
+
+func WithTemplate(t *template.Template) HandlerOpt {
+	return func(h *handler) {
+		h.t = t
+	}
+}
+
+func NewHandler(s Story, opts ...HandlerOpt) http.Handler {
+	h := handler{s, tpl}
+	for _, opt := range opts {
+		opt(&h)
+	}
+	return h
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -90,14 +101,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path = path[1:]
 	if chapter, ok := h.s[path]; ok {
-		err := tpl.Execute(w, chapter)
+		err := h.t.Execute(w, chapter)
 		if err != nil {
 			log.Printf("%v",err)
 			http.Error(w, "Something went wrong...", http.StatusInternalServerError)
 		}
 		return
 	}
-	fmt.Println(path)
 	http.Error(w, "Chapter not found", http.StatusNotFound)
 }
 
@@ -125,4 +135,5 @@ type Option struct {
 
 type handler struct {
 	s Story
+	t *template.Template
 }
